@@ -149,6 +149,11 @@ TEMPLATE = r"""<!doctype html>
 const SCHEMA=__SCHEMA__;
 const SOURCES=__SOURCES__;
 const ALLDATA=__DATA__;
+// default column layout (used only for the initial header paint before a
+// lead type is chosen); renderHead()/colsFor() override it per type.
+const COLS=[["source","Source"],["lead_type","Type"],["property_address","Property"],
+  ["name","Parties"],["amount","Amount"],["record_date","Date"],
+  ["status","Status"],["case_number","Case # / Cert"]];
 let DATA=[],SRC="ALL",TYPE="ALL",OPENONLY=true,SORT={c:null,d:1},PAGE=1,PAGESIZE=50;
 const $=id=>document.getElementById(id);
 function init(){
