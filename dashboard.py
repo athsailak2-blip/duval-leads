@@ -121,8 +121,9 @@ SCHEMA = {
     ],
     # --- Other sources ---
     "Tax Deed": [
-        ("property_address", "Property (Legal)", "addr"),
-        ("name", "Owner / Applicant", "txt"),
+        ("property_address", "Situs (Address)", "addr"),
+        ("name", "Owner", "txt"),
+        ("legal_desc", "Legal Desc", "txt"),
         ("amount", "Opening Bid", "amt"), ("status", "Sale", "status"),
         ("case_number", "Cert #", "txt"),
     ],
@@ -197,8 +198,8 @@ def _civil_parties(s):
     the only reliable source for plaintiff/defendant on these rows.
     """
     s = (s or "").strip()
-    pls = re.findall(r"([^(]+?)\s*\(P\)", s)
-    dfs = re.findall(r"([^(]+?)\s*\(D\)", s)
+    pls = re.findall(r"([A-Z0-9][A-Za-z0-9 .,&'-]*?)\s*\(P\)", s)
+    dfs = re.findall(r"([A-Z0-9][A-Za-z0-9 .,&'-]*?)\s*\(D\)", s)
     pl = pls[0].strip(" ,") if pls else ""
     df = dfs[0].strip(" ,") if dfs else ""
     return pl, df
@@ -296,11 +297,14 @@ def enrich(r):
             f["status"] = r.get("status", "") or "\u2014"
             f["case_number"] = r.get("case_number", "")
         else:
-            pl, _ = _split_primary(ex.get("plaintiff", ""))
-            df, _ = _split_primary(ex.get("defendant", ""))
+            # The CSV `plaintiff`/`defendant` columns are polluted (the same
+            # first plaintiff is prepended to every row), so the reliable
+            # per-case party data lives in the `filing_date` party line
+            # tagged with (P)/(D). Parse from there.
+            pl, df = _civil_parties(r.get("record_date", ""))
             if not pl and not df:
-                # fallback: the scraper parked the party line in record_date
-                pl, df = _civil_parties(r.get("record_date", ""))
+                pl, _ = _split_primary(ex.get("plaintiff", ""))
+                df, _ = _split_primary(ex.get("defendant", ""))
             f["plaintiff"] = pl
             f["defendant"] = df
             f["status"] = r.get("status", "") or "—"
@@ -465,14 +469,15 @@ def load_taxdeed(p):
         if re.search(r"REDEEM", st, re.I):
             continue  # owner paid up -> not a live lead
         status_label = "Sale Scheduled" if st.upper() == "SALE" else st
-        owners = r.get("owner_appraiser", "") or r.get("owners_grid", "")
+        owners = r.get("owners_grid", "") or r.get("owner_appraiser", "")
+        situs = r.get("situs", "")
         out.append({
             "source": "TaxDeed",
             "lead_type": "Tax Deed",
             "record_date": r.get("sale_event_date", ""),
             "case_number": r.get("certificate", "") or r.get("case_number", ""),
             "name": owners,
-            "property_address": r.get("legal_desc", "") or r.get("parcel_id", ""),
+            "property_address": situs or r.get("legal_desc", "") or r.get("parcel_id", ""),
             "amount": r.get("opening_bid", "") or r.get("amount_due", ""),
             "status": status_label,
             "detail": "",
@@ -480,8 +485,12 @@ def load_taxdeed(p):
                       "sale_date": r.get("sale_date", ""),
                       "amount_due": r.get("amount_due", ""),
                       "bid_amount": r.get("bid_amount", ""),
+                      "final_bid": r.get("final_bid", ""),
+                      "surplus": r.get("surplus", ""),
                       "applicant": r.get("applicant", ""),
-                      "legal_desc": r.get("legal_desc", "")},
+                      "owner_appraiser": r.get("owner_appraiser", ""),
+                      "legal_desc": r.get("legal_desc", ""),
+                      "situs": situs},
         })
     return out
 
