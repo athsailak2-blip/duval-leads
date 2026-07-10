@@ -81,7 +81,7 @@ SCHEMA = {
         ("plaintiff", "Plaintiff", "txt"), ("defendant", "Defendant", "txt"),
         ("status", "Status", "status"), ("case_number", "Case #", "txt"),
     ],
-    "Non-Homestead Res Foreclosure": [
+    "Non Homestead Res Foreclosure": [
         ("plaintiff", "Plaintiff", "txt"), ("defendant", "Defendant", "txt"),
         ("status", "Status", "status"), ("case_number", "Case #", "txt"),
     ],
@@ -188,6 +188,22 @@ def _probate_split(grantor, grantee):
     return dec, party
 
 
+def _civil_parties(s):
+    """Pull (plaintiff, defendant) out of a CoreCivil party line stored in
+    `filing_date`, e.g.
+      'LSREF7 RANGER, LLC (P) MW BEACON POINTE 1, LLC (D) ... (D) ...'
+    Returns the first (P) party and first (D) party, or ('','') if none.
+    The scraper stuffed the whole party blob into filing_date, so this is
+    the only reliable source for plaintiff/defendant on these rows.
+    """
+    s = (s or "").strip()
+    pls = re.findall(r"([^(]+?)\s*\(P\)", s)
+    dfs = re.findall(r"([^(]+?)\s*\(D\)", s)
+    pl = pls[0].strip(" ,") if pls else ""
+    df = dfs[0].strip(" ,") if dfs else ""
+    return pl, df
+
+
 def _civil_decedent(s):
     """Pull a clean decedent name out of a garbled CoreCivil `filing_date`.
 
@@ -282,9 +298,12 @@ def enrich(r):
         else:
             pl, _ = _split_primary(ex.get("plaintiff", ""))
             df, _ = _split_primary(ex.get("defendant", ""))
+            if not pl and not df:
+                # fallback: the scraper parked the party line in record_date
+                pl, df = _civil_parties(r.get("record_date", ""))
             f["plaintiff"] = pl
             f["defendant"] = df
-            f["status"] = r.get("status", "") or "\u2014"
+            f["status"] = r.get("status", "") or "—"
             f["case_number"] = r.get("case_number", "")
     else:
         # fallback: surface the flat fields
@@ -559,11 +578,12 @@ def load_eviction(p):
 
 def load_corecivil(p):
     out = []
+    seen_case = set()
     for r in _read_csv(p):
         st = (r.get("status", "") or "").replace("----", "").strip()
         st = re.sub(r"\s+", " ", st)
         ct = (r.get("case_type", "") or "X").strip()
-        out.append({
+        rec = {
             "source": "CoreCivil",
             "lead_type": _title_case(ct),
             "record_date": r.get("filing_date", ""),
@@ -579,7 +599,16 @@ def load_corecivil(p):
                       "defendant": r.get("defendant", ""),
                       "parcel_id": r.get("parcel_id", ""),
                       "owner_appraiser": r.get("owner_appraiser", "")},
-        })
+        }
+        # De-dupe: core_civil.csv repeats the same case under multiple
+        # foreclosure type labels (Commercial/Homestead/Non-Homestead/
+        # Mortgage). Keep the first occurrence so each case appears once.
+        cn = rec["case_number"]
+        if cn and cn in seen_case:
+            continue
+        if cn:
+            seen_case.add(cn)
+        out.append(rec)
     return out
 
 
