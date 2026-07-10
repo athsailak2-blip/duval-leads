@@ -1,0 +1,31 @@
+# ---- Secrets (NEVER commit) ----
+.env
+.env.*
+*.key
+*.pem
+.tinyfish_key
+*_key
+secrets.json
+
+# ---- Python ----
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# ---- Scraped data (huge + contains PII; site is pre-built into public/) ----
+data/
+ref_*/__pycache__/
+
+# ---- Build / runtime artifacts ----
+*.tgz
+*.tar.gz
+*.log
+omniroute.log
+duval.tgz
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+*.swp
