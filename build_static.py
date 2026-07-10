@@ -115,10 +115,34 @@ TEMPLATE = r"""<!doctype html>
   .st-sale{background:#06222b;color:#5fd0e0}
   .st-other{background:#1c232c;color:#8b98a5}
   th{border-bottom:2px solid #2d3644}
+  /* ---------- Mobile-friendly ---------- */
   @media(max-width:720px){
-    .card{min-width:120px;flex:1 1 40%}
-    input[type=search]{min-width:100%}
-    th,td{padding:9px 8px;font-size:12.5px}
+    body{font-size:14px}
+    header{padding:14px 14px}
+    h1{font-size:18px}
+    main{padding:14px 14px;max-width:100%}
+    /* stack the control bar: each control full width */
+    .bar{gap:8px}
+    .bar > select,
+    .bar > input[type=search]{flex:1 1 100%;min-width:0;width:100%}
+    .bar > label.chk{flex:1 1 100%;justify-content:flex-start}
+    .bar > button.btn{flex:1 1 100%;width:100%}
+    /* chips wrap already; make them tappable */
+    .chip{padding:7px 12px;font-size:13px}
+    /* cards: 2 per row */
+    .card{min-width:0;flex:1 1 44%}
+    /* table: keep horizontal scroll inside its own box (don't widen page) */
+    .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    table{min-width:560px}            /* guarantees columns stay readable, scrolls within .scroll */
+    th,td{padding:10px 9px;font-size:12.5px}
+    th{position:sticky;top:128px}     /* header height on mobile */
+    .wrap{max-width:180px}
+    .cards{gap:8px}
+  }
+  @media(max-width:420px){
+    .card{flex:1 1 100%}
+    table{min-width:520px}
+    th,td{padding:9px 7px;font-size:12px}
   }
 </style>
 </head>
