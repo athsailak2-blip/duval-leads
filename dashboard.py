@@ -105,6 +105,13 @@ SCHEMA = {
         ("plaintiff", "Plaintiff", "txt"), ("defendant", "Defendant", "txt"),
         ("status", "Status", "status"), ("case_number", "Case #", "txt"),
     ],
+    # Dissolution of Marriage (divorce): the marital home is often ordered
+    # sold or bought out -> highly motivated, off-market sellers.
+    "Dissolution": [
+        ("plaintiff", "Petitioner", "txt"), ("defendant", "Respondent", "txt"),
+        ("property_address", "Property", "addr"),
+        ("status", "Status", "status"), ("case_number", "Case #", "txt"),
+    ],
     # Estate / probate civil: the source stashes the decedent in `filing_date`,
     # so we surface a clean "Decedent" column instead of a bogus date.
     "Opening Estate": [
@@ -307,6 +314,7 @@ def enrich(r):
                 df, _ = _split_primary(ex.get("defendant", ""))
             f["plaintiff"] = pl
             f["defendant"] = df
+            f["property_address"] = r.get("property_address", "")
             f["status"] = r.get("status", "") or "—"
             f["case_number"] = r.get("case_number", "")
     else:
