@@ -9,7 +9,7 @@ Run after the scrapers update the CSVs (also called at the end of run_daily.py).
 Output: /root/duval/public/index.html
 """
 from __future__ import annotations
-import json, logging
+import json, logging, hashlib, datetime
 from pathlib import Path
 
 from dashboard import collect, SOURCES, ROWS, SCHEMA  # reuse the exact same normalized loaders
@@ -195,23 +195,31 @@ TEMPLATE = r"""<!doctype html>
   <div class="pager" id="pager"></div>
 </main>
 <script>
-const SCHEMA=__SCHEMA__;
-const SOURCES=__SOURCES__;
-const ALLDATA=__DATA__;
+const BUILD_ID="__BUILD__";
+let SCHEMA={},SOURCES=[],ALLDATA=[];
 const COLS=[["source","Source"],["lead_type","Type"],["property_address","Property"],
   ["name","Parties"],["amount","Amount"],["record_date","Filed"],
   ["status","Status"],["case_number","Case # / Cert"]];
 let DATA=[],SRC="ALL",TYPE="ALL",OPENONLY=true,SORT={c:null,d:1},PAGE=1,PAGESIZE=50;
 const $=id=>document.getElementById(id);
 function init(){
-  const sel=$("source");
-  for(const s of SOURCES){const o=document.createElement("option");o.value=s.source;o.textContent=s.source+" ("+s.count+")";sel.appendChild(o);}
-  sel.onchange=()=>{SRC=sel.value;PAGE=1;load();};
-  $("q").oninput=()=>{PAGE=1;render();};
-  $("openonly").onchange=()=>{OPENONLY=$("openonly").checked;PAGE=1;load();};
-  $("upd").textContent=new Date().toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
-  $("srccount").textContent=SOURCES.length+" sources";
-  load();
+  loadData();
+}
+function loadData(){
+  const url="leads.json?b="+BUILD_ID;
+  fetch(url).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();}).then(j=>{
+    SCHEMA=j.schema||{};SOURCES=j.sources||[];ALLDATA=j.data||[];
+    const sel=$("source");
+    for(const s of SOURCES){const o=document.createElement("option");o.value=s.source;o.textContent=s.source+" ("+s.count+")";sel.appendChild(o);}
+    sel.onchange=()=>{SRC=sel.value;PAGE=1;load();};
+    $("q").oninput=()=>{PAGE=1;render();};
+    $("openonly").onchange=()=>{OPENONLY=$("openonly").checked;PAGE=1;load();};
+    $("upd").textContent=new Date().toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+    $("srccount").textContent=SOURCES.length+" sources";
+    load();
+  }).catch(e=>{
+    $("loading").innerHTML="<div style='color:var(--red);padding:20px'>Failed to load leads data ("+e.message+").<br>Check your connection and refresh.</div>";
+  });
 }
 function load(){setLoading();DATA=(SRC==="ALL"?ALLDATA:ALLDATA.filter(r=>r.source===SRC));PAGE=1;buildChips();render();}
 function setLoading(){$("loading").style.display="block";$("cards").style.display="none";$("cnt").style.display="none";$("tblwrap").style.display="none";}
@@ -313,13 +321,25 @@ def main():
     data = [{k: r.get(k, "") for k in KEEP} for r in rows]
     log.info("total leads=%d across %d sources", len(rows), len(sources))
 
-    html = (TEMPLATE
-            .replace("__SOURCES__", json.dumps(sources))
-            .replace("__SCHEMA__", json.dumps(SCHEMA, ensure_ascii=False))
-            .replace("__DATA__", json.dumps(data, ensure_ascii=False)))
+    # Build id: short hash of the data so the browser refetches leads.json
+    # only when content actually changed (kills stale-cache problems).
+    payload = json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    build_id = hashlib.sha1(payload).hexdigest()[:10]
+
+    # Write the heavy data as a SEPARATE file (loaded via fetch with cache-bust).
+    # This keeps index.html a tiny shell that loads instantly.
+    leads = {"schema": SCHEMA, "sources": sources, "data": data}
+    (OUT / "leads.json").write_text(
+        json.dumps(leads, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    log.info("wrote %s (%d bytes)", OUT / "leads.json",
+             (OUT / "leads.json").stat().st_size)
+
+    html = TEMPLATE.replace("__BUILD__", build_id)
     out = OUT / "index.html"
     out.write_text(html, encoding="utf-8")
-    log.info("wrote %s (%d bytes)", out, out.stat().st_size)
+    log.info("wrote %s (%d bytes, build=%s)", out, out.stat().st_size, build_id)
 
 
 if __name__ == "__main__":
