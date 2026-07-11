@@ -200,13 +200,15 @@ def _civil_parties(s):
     """Pull (plaintiff, defendant) out of a CoreCivil party line stored in
     `filing_date`, e.g.
       'LSREF7 RANGER, LLC (P) MW BEACON POINTE 1, LLC (D) ... (D) ...'
-    Returns the first (P) party and first (D) party, or ('','') if none.
+      'GONZALES, DEROLINE (P) GONZALES PINTO, MARIO ROBERTO (R)'   # dissolution
+    Returns the first (P) party and first (D)/(R) party, or ('','') if none.
     The scraper stuffed the whole party blob into filing_date, so this is
     the only reliable source for plaintiff/defendant on these rows.
+    (R) = Respondent in Dissolution of Marriage cases maps to defendant.
     """
     s = (s or "").strip()
     pls = re.findall(r"([A-Z0-9][A-Za-z0-9 .,&'-]*?)\s*\(P\)", s)
-    dfs = re.findall(r"([A-Z0-9][A-Za-z0-9 .,&'-]*?)\s*\(D\)", s)
+    dfs = re.findall(r"([A-Z0-9][A-Za-z0-9 .,&'-]*?)\s*\((?:D|R)\)", s)
     pl = pls[0].strip(" ,") if pls else ""
     df = dfs[0].strip(" ,") if dfs else ""
     return pl, df
